@@ -2,6 +2,7 @@ package org.example;
 
 public class Client {
     public static final String DESTINATION_IP = "localhost";
+    //public static final String DESTINATION_IP = "192.168.178.29";
 
     public static final int DESTINATION_PORT = 44444;
 
