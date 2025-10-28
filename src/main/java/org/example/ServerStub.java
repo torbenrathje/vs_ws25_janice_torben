@@ -12,6 +12,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.NoSuchElementException;
@@ -35,6 +37,12 @@ davon nachrichtentyp erstellen
 
     public void startServer(int port) throws IOException {
         ServerSocket serverSocket = new ServerSocket(port);
+
+        //ServerSocket serverSocket = new ServerSocket();
+        InetAddress localAddress = InetAddress.getLocalHost();
+        System.out.println("server runs on: " + localAddress.getHostAddress());
+        //serverSocket.bind(new InetSocketAddress(localAddress, port));
+
         while (true) {
             Socket clientSocket = serverSocket.accept();
             new Thread(() -> handleClient(clientSocket)).start();
