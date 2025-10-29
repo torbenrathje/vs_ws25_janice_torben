@@ -7,8 +7,6 @@ import java.util.NoSuchElementException;
 import static org.junit.jupiter.api.Assertions.*;
 public class IntegrationsTest {
 
-    static final int NUM_RUNS = 500;
-
     @BeforeAll
     static void startServer() {
         Thread serverThread = new Thread(() -> Server.main(new String[]{}));
@@ -58,32 +56,6 @@ public class IntegrationsTest {
         Datastore client = new ClientStub(Client.DESTINATION_IP, Client.DESTINATION_PORT);
 
         assertThrows(NoSuchElementException.class, () -> client.read(999));
-    }
-
-    @Test
-    void testTimeLocalVsRPC(){
-        Datastore client = new ClientStub(Client.DESTINATION_IP, Client.DESTINATION_PORT);
-        Datastore local = new ServerDatastore();
-
-        long startClient = System.nanoTime();
-        for(int i = 0; i < NUM_RUNS; i++){
-            client.write(i, "RPS run:" + i);
-            client.read(i);
-        }
-        long endClient = System.nanoTime();
-
-        long startLocal = System.nanoTime();
-        for(int i = 0; i < NUM_RUNS; i++){
-            local.write(i, "local run:" + i);
-            local.read(i);
-        }
-        long endLocal = System.nanoTime();
-
-        long resultClient = (endClient - startClient) /1000000;
-        long resultLocal = (endLocal - startLocal) /1000000;
-
-        System.out.println("Dauer von " + NUM_RUNS + " RPC Methodenaufrufe beträgt: " + resultClient + " ms");
-        System.out.println("Dauer von " + NUM_RUNS + " lokalen Methodenaufrufe beträgt: " + resultLocal + " ms");
     }
 
 }
