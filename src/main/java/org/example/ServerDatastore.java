@@ -3,13 +3,14 @@ package org.example;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ServerDatastore implements Datastore {
 
     private Map<Integer, String> store;
 
     public ServerDatastore() {
-        store = new HashMap<>();
+        store = new ConcurrentHashMap<>();
     }
 
     @Override
