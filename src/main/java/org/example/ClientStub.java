@@ -27,14 +27,14 @@ public class ClientStub implements Datastore{
     @Override
     public void write(int index, String data) {
         MessageRequest request = new MessageRequest(MessageType.REQUEST, currentId++, "write", new Object[]{index, data});
-        System.out.println(request);
+        //System.out.println(request);
         sendRequestToIp(request);
     }
 
     @Override
     public String read(int index) throws NoSuchElementException {
         MessageRequest request = new MessageRequest(MessageType.REQUEST, currentId++, "read", new Object[]{index});
-        System.out.println(request);
+        //System.out.println(request);
         return sendRequestToIp(request);
     }
 
@@ -56,7 +56,7 @@ public class ClientStub implements Datastore{
                 AbstractMessage messageResponse = gson.fromJson(jsonResponse, AbstractMessage.class);
                 //TODO fehlerbehandlung
                 if (messageResponse instanceof MessageResponse res) {
-                    System.out.println(res);
+                    //System.out.println(res);
                     if (res.error != null)
                     {
                         switch (res.error) {

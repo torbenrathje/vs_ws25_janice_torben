@@ -60,7 +60,7 @@ davon nachrichtentyp erstellen
                     .create();
 
             AbstractMessage messageRequest = gson.fromJson(jsonRequest, AbstractMessage.class);
-            System.out.println(messageRequest);
+            //System.out.println(messageRequest);
 
 
             //ab jetzt nachricht erstellt und evtl fehler weitergegeben
@@ -118,7 +118,7 @@ davon nachrichtentyp erstellen
                 }
 
                 MessageResponse messageResponse = new MessageResponse(type, id, result, error);
-                System.out.println(messageResponse);
+                //System.out.println(messageResponse);
                 out.println(messageResponse.toJson());
             }
 
