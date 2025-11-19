@@ -10,11 +10,8 @@ repositories {
 }
 
 dependencies {
-    // Akka Actor
-    implementation("com.typesafe.akka:akka-actor_2.13:2.6.20")
-
-    // Akka Remote (für verteilte Kommunikation)
-    implementation("com.typesafe.akka:akka-remote_2.13:2.6.20")
+    // Eclipse Paho MQTT Client
+    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
 
     // Gson für JSON-Serialisierung
     implementation("com.google.code.gson:gson:2.10.1")

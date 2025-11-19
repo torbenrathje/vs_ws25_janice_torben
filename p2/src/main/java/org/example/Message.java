@@ -1,13 +1,13 @@
 package org.example;
 
-public class MessageA2 {
+public class Message {
     public enum Type {INIT, UPDATE}
 
     private Type type;
     private int senderId;
     private int value;
 
-    public MessageA2(Type type, int senderId, int value){
+    public Message(Type type, int senderId, int value){
         this.type = type;
         this.senderId = senderId;
         this.value = value;
