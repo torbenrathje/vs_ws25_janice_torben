@@ -1,4 +1,4 @@
-package org.example.a2;
+package org.example;
 
 public class MessageA2 {
     public enum Type {INIT, UPDATE}
