@@ -54,18 +54,17 @@ public class ClientStub implements Datastore{
                 String jsonResponse = in.readLine();
 
                 AbstractMessage messageResponse = gson.fromJson(jsonResponse, AbstractMessage.class);
-                //TODO fehlerbehandlung
                 if (messageResponse instanceof MessageResponse res) {
                     //System.out.println(res);
                     if (res.error != null)
                     {
                         switch (res.error) {
                             case NO_SUCH_ELEMENT -> throw new NoSuchElementException();
-                            case METHOD_NAME_INVALID -> System.err.println("Method Name Invalid");
-                            case PARAMETER_NUM_INVALID -> System.err.println("Number of Parameters Invalid");
-                            case PARAMETER_TYPE_INVALID -> System.err.println("Parameter Type Invalid");
-                            case SERVER_NOT_REACHABLE -> System.err.println("Server Not Reachable");
-                            default -> System.err.println("Unknown Exception");
+                            case METHOD_NAME_INVALID -> throw new RuntimeException("Method Name Invalid");
+                            case PARAMETER_NUM_INVALID -> throw new RuntimeException("Number of Parameters Invalid");
+                            case PARAMETER_TYPE_INVALID -> throw new RuntimeException("Parameter Type Invalid");
+                            case SERVER_NOT_REACHABLE -> throw new RuntimeException("Server Not Reachable");
+                            default -> throw new RuntimeException("Unknown Exception");
                         }
                     }
                     return res.result;
