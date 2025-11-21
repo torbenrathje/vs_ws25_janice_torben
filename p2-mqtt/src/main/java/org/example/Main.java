@@ -8,7 +8,7 @@ public class Main {
     //TODO Runconfig: 1 1 5 108 76 12 60 36
     //TODO mosquitto muss laufen
 
-    public static final int WARTEZEIT = 10_000;
+    public static final int WARTEZEIT = 20_000;
     public static final String ADDRESS_BROKER = "tcp://localhost:1883"; // 1883 auf mosquitto
     public static final String ADDRESS_BROKER_REMOTE = "tcp://192.168.178.29:1883"; //61616 standard active mq port
 
@@ -72,7 +72,7 @@ public class Main {
             for (int i = pcId; i < numProc; i+=numPc)
             {
                 try {
-                    connectionMap.put(i, new MqttConnection(ADDRESS_BROKER, "p" + i));
+                    connectionMap.put(i, new MqttConnection(ADDRESS_BROKER_REMOTE, "p" + i));
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
