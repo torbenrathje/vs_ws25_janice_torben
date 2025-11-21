@@ -8,13 +8,14 @@ public class Main {
     //TODO Runconfig: 1 1 5 108 76 12 60 36
     //TODO mosquitto muss laufen
 
+
     public static final int WARTEZEIT = 20_000;
-    public static final String ADDRESS_BROKER = "tcp://localhost:1883"; // 1883 auf mosquitto
+    public static final String ADDRESS_BROKER = "tcp://localhost:1883"; // 1883 auf mosquitto / active mq
     public static final String ADDRESS_BROKER_REMOTE = "tcp://192.168.178.29:1883"; //61616 standard active mq port
 
 
     /**
-     * 2, 1, 5, [3, 6, 9, 89, 7] startargumente
+     * 2 0 5 108 76 12 60 36 startargumente
      * ; ANzhal gesamt rechner; "rechner ID fängt bei 0 an", anzahl an prozessen; liste mit zahlen,( dynamisch)
      *
      * liste durchgehen in schleife; rechner 1 erster wert, rechner 2 zweiter wert, von vorne bis ende erreicht
@@ -38,7 +39,14 @@ public class Main {
             numProc= Integer.parseInt(args[2]);
 
 
-            //int[] ids = IntStream.rangeClosed(1, numProc+1).toArray();
+            String brokerAddress;
+            if (pcId == 0) {
+                brokerAddress = ADDRESS_BROKER;
+            }
+            else
+            {
+                brokerAddress = ADDRESS_BROKER_REMOTE;
+            }
 
             for (int i = 3; i < numProc+3; i++)
             {
@@ -61,6 +69,7 @@ public class Main {
                 });
                 masterThread.setDaemon(true); // schließt bei testende
                 masterThread.start();
+
             }
 
 
@@ -72,7 +81,7 @@ public class Main {
             for (int i = pcId; i < numProc; i+=numPc)
             {
                 try {
-                    connectionMap.put(i, new MqttConnection(ADDRESS_BROKER_REMOTE, "p" + i));
+                    connectionMap.put(i, new MqttConnection(brokerAddress, "p" + i));
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
@@ -113,12 +122,12 @@ public class Main {
             // disconnect
             for (MqttConnection mqttConnection : connectionMap.values())
             {
-                mqttConnection.disconnect();
+                mqttConnection.disconnectAndClose();
             }
 
-            if (pcId == 0 && masterConnection != null)
+            if (pcId == 0)
             {
-                masterConnection.disconnect();
+                masterConnection.disconnectAndClose();
             }
 
         }
