@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="org.example.IntegrationsTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2025-10-28T15:18:37" hostname="DESKTOP-JQ372JM" time="0.08">
+  <properties/>
+  <testcase name="testWriteAndReadSingleValue()" classname="org.example.IntegrationsTest" time="0.059"/>
+  <testcase name="testNoSuchElement()" classname="org.example.IntegrationsTest" time="0.004"/>
+  <testcase name="testOverwriteValue()" classname="org.example.IntegrationsTest" time="0.007"/>
+  <testcase name="testWriteAndReadTwoValues()" classname="org.example.IntegrationsTest" time="0.007"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

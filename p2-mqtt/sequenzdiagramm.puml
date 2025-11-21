@@ -1,0 +1,23 @@
+@startuml "Sequenzdiagramm: Ring Join und Start"
+participant Client1
+participant Client2
+participant Master
+participant Broker
+
+Client1 -> Broker: publish("ring/join")
+Client2 -> Broker: publish("ring/join")
+
+Broker -> Master: deliver JOIN(Client1)
+Broker -> Master: deliver JOIN(Client2)
+
+Master -> Master: joinClients.add(Client1)
+Master -> Master: joinClients.add(Client2)
+
+Master -> Broker: publish("ring/start")
+
+Broker -> Client1: deliver START
+Broker -> Client2: deliver START
+
+Client1 -> Broker: broadcast()
+Client2 -> Broker: broadcast()
+@enduml

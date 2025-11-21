@@ -3,34 +3,51 @@ package org.example;
 import org.eclipse.paho.client.mqttv3.*;
 
 public class MqttConnection {
-    private final IMqttClient client;
+    private final IMqttAsyncClient client;
 
-    public MqttConnection(String broker, String clientId) throws Exception {
-        System.out.println("[MQTT] Starte Client '" + clientId + "' auf Broker " + broker);
-        client = new MqttClient(broker, clientId);
+    public MqttConnection(String broker, String clientId) throws MqttException {
+        System.out.println("[MQTT] Starte Async Client '" + clientId + "' auf Broker " + broker);
+        client = new MqttAsyncClient(broker, clientId);
 
-        client.connect();
+        //MqttConnectOptions options = new MqttConnectOptions();
+        //options.setMqttVersion(MqttConnectOptions.MQTT_VERSION_3_1); // MQTT 5 aktivieren
+
+
+
+        client.connect().waitForCompletion(); // Initial synchron, um Verbindung aufzubauen
         System.out.println("[MQTT] Client '" + clientId + "' verbunden.");
     }
 
-    public void subscribe(String topic, IMqttMessageListener listener) throws Exception {
+    public void subscribe(String topic, IMqttMessageListener listener) throws MqttException {
         System.out.println("[MQTT] Subscribing '" + client.getClientId() + "' to topic: " + topic);
-        client.subscribe(topic, (t, msg) -> {
-            String payload = new String(msg.getPayload());
-            System.out.println("[MQTT] <== Received on " + t + " by " + client.getClientId() + ": " + payload);
-            listener.messageArrived(t, msg); // deine Logik weiterreichen
-        });
+        client.subscribe(topic, 1, listener); // QoS 1, Listener direkt
     }
 
-    public void publish(String topic, String json) throws Exception {
-        System.out.println("[MQTT] ==> Publishing from " + client.getClientId() +
-                " to " + topic + ": " + json);
+    // Asynchrones Publish
+    public void publish(String topic, String json) {
+        try {
+            MqttMessage message = new MqttMessage(json.getBytes());
+            message.setQos(1); // MQTT stufe, QoS Stufe 1 = At least once, Nachricht wird mindestens 1 mal geliefert, kann häufiger wenn ACK verloren geht
 
-        client.publish(topic, json.getBytes(), 0, false);
+            client.publish(topic, message, null, new IMqttActionListener() {
+                @Override
+                public void onSuccess(IMqttToken asyncToken) {
+                    System.out.println("[MQTT ASYNC] Message sent to " + topic);
+                }
+
+                @Override
+                public void onFailure(IMqttToken asyncToken, Throwable exception) {
+                    System.out.println("[MQTT ASYNC ERROR] Failed to send message to " + topic);
+                    exception.printStackTrace();
+                }
+            });
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
     }
 
-    public void disconnect() throws Exception {
+    public void disconnect() throws MqttException {
         System.out.println("[MQTT] Disconnecting client '" + client.getClientId() + "'");
-        client.disconnect();
+        client.disconnect().waitForCompletion();
     }
 }
