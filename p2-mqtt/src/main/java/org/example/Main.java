@@ -8,7 +8,7 @@ public class Main {
     //TODO Runconfig: 1 1 5 108 76 12 60 36
     //TODO mosquitto muss laufen
 
-    public static final int WARTEZEIT = 5_000;
+    public static final int WARTEZEIT = 20_000;
     public static final String ADDRESS_BROKER = "tcp://localhost:1883"; // 1883 auf mosquitto / active mq
     public static final String ADDRESS_BROKER_REMOTE = "tcp://192.168.178.29:1883"; //61616 standard active mq port
 
