@@ -6,11 +6,10 @@ import java.util.stream.IntStream;
 public class Main {
 
     //TODO Runconfig: 1 1 5 108 76 12 60 36
-    //TODO mosquitto muss laufen
 
-    public static final int WARTEZEIT = 20_000;
+    public static final int WARTEZEIT_MAIN =8_000;
     public static final String ADDRESS_BROKER = "tcp://localhost:1883"; // 1883 auf mosquitto / active mq
-    public static final String ADDRESS_BROKER_REMOTE = "tcp://192.168.178.29:1883"; //61616 standard active mq port
+    public static final String ADDRESS_BROKER_REMOTE = "tcp://172.20.10.3:1883"; //61616 standard active mq port
 
 
     /**
@@ -66,7 +65,7 @@ public class Main {
                         throw new RuntimeException(e);
                     }
                 });
-                masterThread.setDaemon(true); // schließt bei testende
+                masterThread.setDaemon(true); // schließt bei ende
                 masterThread.start();
 
             }
@@ -107,27 +106,6 @@ public class Main {
             }
 
             // --- Läuft automatisch durch Startnachrichten ---
-
-            // Wartezeit, um den Algorithmus laufen zu lassen
-            Thread.sleep(WARTEZEIT);// TODO wartezeit ab start am besten
-
-
-            //endausgabe von M
-            for (RingProcess proc : ringProcessHashMap.keySet())
-            {
-                System.out.println(proc.getM());
-            }
-
-            // disconnect
-            for (MqttConnection mqttConnection : connectionMap.values())
-            {
-                mqttConnection.disconnectAndClose();
-            }
-
-            if (pcId == 0)
-            {
-                masterConnection.disconnectAndClose();
-            }
 
         }
         catch (Exception e) {

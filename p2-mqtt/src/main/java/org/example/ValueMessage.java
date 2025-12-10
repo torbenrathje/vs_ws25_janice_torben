@@ -1,7 +1,7 @@
 package org.example;
 
 public class ValueMessage {
-    public enum Type {INIT, UPDATE, START}
+    public enum Type {INIT, UPDATE, START, RESULT}
 
     private Type type;
     private String senderId;

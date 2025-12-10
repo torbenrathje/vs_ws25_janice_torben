@@ -47,9 +47,13 @@ public class MqttConnection {
     }
 
     public void disconnectAndClose() throws MqttException {
-        System.out.println("[MQTT] Disconnecting client '" + client.getClientId() + "'");
-        client.disconnect().waitForCompletion();
-        client.close();
-        System.out.println("[MQTT] Client disconnected '" + client.getClientId() + "'");
+        if (client != null && client.isConnected()) {
+            System.out.println("[MQTT] Disconnecting client '" + client.getClientId() + "'");
+            client.disconnect().waitForCompletion();
+            client.close();
+            System.out.println("[MQTT] Client disconnected '" + client.getClientId() + "'");
+        } else {
+            System.out.println("[MQTT] Client already disconnected or null");
+        }
     }
 }

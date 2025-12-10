@@ -13,6 +13,8 @@ public class RingProcess {
 
     //private final Object lock = new Object();
 
+    public static final int WARTEZEIT = 5_000;
+
 
     public RingProcess(String id, int initialValue, String prev, String next, MqttConnection conn) {
         this.id = id;
@@ -41,11 +43,31 @@ public class RingProcess {
         try {
             conn.subscribe(topic, (t, msg) -> {
                 System.out.println("[RECEIVE] " + id + " received message on " + t + ": " );
-                broadcast();
+                sendUpdateMessage();
+                startResultThread();
             });
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private void startResultThread() {
+        new Thread(() -> {
+            try {
+                Thread.sleep(WARTEZEIT);
+                sendResultMessage();
+                Thread.sleep(1000);
+                conn.disconnectAndClose();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    private void sendResultMessage() {
+        ValueMessage msg = new ValueMessage(ValueMessage.Type.RESULT, id, M);
+        String json = gson.toJson(msg);
+        conn.publish("result", json);
     }
 
     private void subscribeToOwnTopic() {
@@ -77,7 +99,7 @@ public class RingProcess {
             System.out.println("[UPDATE] " + id + ": M changed from " + oldM + " → " + M);
 
             try {
-                broadcast();
+                sendUpdateMessage();
             } catch (Exception e) {
                 System.out.println("[ERROR] " + id + " failed to broadcast:");
                 e.printStackTrace();
@@ -88,7 +110,7 @@ public class RingProcess {
         //}
     }
 
-    private void broadcast() {
+    private void sendUpdateMessage() {
         ValueMessage msg = new ValueMessage(ValueMessage.Type.UPDATE, id, M);
         String json = gson.toJson(msg);
 
