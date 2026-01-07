@@ -4,5 +4,7 @@ public enum OperationRegistry {
     REGISTER,
     UNREGISTER,
     LIST,
-    RING_INFO
+    RING_INFO,
+    CLIENT_INFO //TODO neu
+
 }

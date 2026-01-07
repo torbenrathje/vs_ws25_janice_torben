@@ -1,11 +1,13 @@
 package org.example;
 
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import org.cads.vs.roboticArm.hal.simulation.CaDSRoboticArmSimulation;
 import org.cads.vs.roboticArm.hal.real.CaDSRoboticArmReal;
 import org.cads.vs.roboticArm.hal.ICaDSRoboticArm;
 
 import java.io.*;
+import java.lang.reflect.Type;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
@@ -92,32 +94,44 @@ public class RobotNode {
              PrintWriter out = new PrintWriter(client.getOutputStream(), true)) {
 
             String line = in.readLine();
-
-            // {"operation":"command","payload":{"command":"MOVE 20"}}
             if (line == null) return;
 
             Gson gson = new Gson();
-            Request<OperationRobot, ?> request = gson.fromJson(line, Request.class);
+
+            Type requestType = new TypeToken<Request<OperationRobot, Object>>(){}.getType();
+            Request<OperationRobot, ?> request = gson.fromJson(line, requestType);
+
+            Response<?> response;
 
             switch (request.getOperation()) {
                 case MOVE -> {
                     Number number = (Number) request.getPayload();
                     int percentage = number.intValue();
+
                     simulateMovement(percentage);
-                    out.println("OK: MOVE ausgeführt");
+
+                    response = new Response<>("ok", null, "MOVE ausgeführt");
                 }
+
                 case SHUTDOWN -> {
                     unregister();
                     shutdown();
-                    out.println("OK: Robot heruntergefahren");
+
+                    response = new Response<>("ok", null, "Robot heruntergefahren");
                 }
-                default -> out.println("ERROR: Unbekannte Operation");
+
+                default -> {
+                    response = new Response<>("error", null, "Unbekannte Operation");
+                }
             }
 
-        } catch (IOException | InterruptedException e) {
+            out.println(gson.toJson(response));
+
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
+
 
 
 

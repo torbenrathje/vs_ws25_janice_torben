@@ -26,6 +26,12 @@ public class TerminalClient implements Runnable {
     private final Scanner scanner = new Scanner(System.in);
     private final SocketClient socketClient = new SocketClient();
 
+    private Thread tokenListenerThread;
+    private Thread ringUpdateThread;
+    private volatile boolean running = true; // Mit volatile: Thread B sieht sofort, dass running auf false gesetzt wurde.
+    private ServerSocket tokenServerSocket;
+
+
     public TerminalClient(String name, String ip, int port) {
         this.name = name;
         this.ip = ip;
@@ -48,6 +54,11 @@ public class TerminalClient implements Runnable {
     }
 
     public void start() throws Exception {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("JVM Shutdown Hook ausgelöst");
+            shutdown();
+        }));
+
         //Registrierung beim Registry-Server
         if (!register()) {
             System.err.println("Registrierung fehlgeschlagen, beende.");
@@ -58,7 +69,7 @@ public class TerminalClient implements Runnable {
         startTokenListener(port);
 
         //Ring-Update starten
-        new Thread(this::updateRingInfo).start();
+        startRingUpdater();
 
         // 4. Falls erster Client: Token starten
         List<Map<String,Object>> clients = listClients();
@@ -95,12 +106,34 @@ public class TerminalClient implements Runnable {
                     }
                 }
                 case "0" -> {
-                    unregister();
+                    shutdown();
                     return;
                 }
                 default -> System.out.println("Ungueltige Eingabe");
             }
         }
+    }
+
+    private void shutdown() {
+        unregister();
+        running = false;
+        if (tokenListenerThread != null) {
+            tokenListenerThread.interrupt(); // unterbricht eventuell accept
+        }
+        if (ringUpdateThread != null) {
+            ringUpdateThread.interrupt();
+        }
+
+        try {
+            if (tokenServerSocket != null) {
+                tokenServerSocket.close(); // 💥 WICHTIG
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void startRingUpdater() {
+        ringUpdateThread = new Thread(this::updateRingInfo, "UpdateInfo-Thread");
+        ringUpdateThread.start();
     }
 
     private boolean register() {
@@ -236,7 +269,7 @@ public class TerminalClient implements Runnable {
 
             Request<OperationRobot, Object> cmdRequest = readRobotCommand();
 
-            if (request != null) {
+            if (cmdRequest != null) {
                 // Senden an RobotNode
                 Map<String,Object> result = socketClient.sendRequest(robotIp, robotPort, cmdRequest);
                 System.out.println("Antwort vom RobotNode: " + result);
@@ -293,7 +326,7 @@ public class TerminalClient implements Runnable {
 
 
     private void updateRingInfo() {
-        while (true) {
+        while (running) {
             try {
                 Thread.sleep(RING_UPDATE_INTERVAL_MS);
                 //Map<String,Object> payload = Map.of("clientId", clientId);
@@ -314,6 +347,7 @@ public class TerminalClient implements Runnable {
             } catch (Exception ignored) {
             }
         }
+        System.out.println("Update Ring Info beendet");
     }
 
     public void receiveToken(Map<String,Object> tokenMap) {
@@ -335,8 +369,10 @@ public class TerminalClient implements Runnable {
 
         try {
             // Hole Nachfolger-IP/Port über Registry
-            Map<String,Object> payload = Map.of("clientId", nextId);
-            Map<String,Object> request = Map.of("operation", "getClientInfo", "payload", payload);
+            //Map<String,Object> payload = Map.of("clientId", nextId);
+            //Map<String,Object> request = Map.of("operation", "getClientInfo", "payload", payload);
+
+            Request<OperationRegistry, Integer> request = new Request<>(OperationRegistry.CLIENT_INFO, nextId);
 
             //öffnet eune Soket-Verbindung zum Server
             Map<String,Object> response = socketClient.sendRequest(REGISTRY_HOST, REGISTRY_PORT, request);
@@ -374,29 +410,53 @@ public class TerminalClient implements Runnable {
     }
 
     private void startTokenListener(int listenPort) {
-        new Thread(() -> {
-            try (ServerSocket server = new ServerSocket(listenPort)) {
-                while (true) {
-                    Socket socket = server.accept();
-                    BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                    PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+        tokenListenerThread = new Thread(() -> {
+            try {
+                tokenServerSocket = new ServerSocket(listenPort);
 
-                    String json = in.readLine();
-                    Map<String,Object> request = new Gson().fromJson(json, Map.class);
+                while (running) {
+                    try {
+                        Socket socket = tokenServerSocket.accept();
 
-                    if ("token".equals(request.get("operation"))) {
-                        Map<String,Object> payload = (Map<String,Object>) request.get("payload");
-                        receiveToken(payload);
-                        out.println("{\"status\":\"ok\"}");
-                    } else {
-                        out.println("{\"status\":\"unknown_operation\"}");
+                        BufferedReader in = new BufferedReader(
+                                new InputStreamReader(socket.getInputStream()));
+                        PrintWriter out = new PrintWriter(
+                                socket.getOutputStream(), true);
+
+                        String json = in.readLine();
+                        Map<String, Object> request =
+                                new Gson().fromJson(json, Map.class);
+
+                        if ("token".equals(request.get("operation"))) {
+                            Map<String, Object> payload =
+                                    (Map<String, Object>) request.get("payload");
+                            receiveToken(payload);
+                            out.println("{\"status\":\"ok\"}");
+                        } else {
+                            out.println("{\"status\":\"unknown_operation\"}");
+                        }
+
+                    } catch (java.net.SocketException e) {
+                        // Wird geworfen, wenn ServerSocket geschlossen wird
+                        if (!running) {
+                            System.out.println("TokenListener beendet");
+                            break;
+                        }
+                        e.printStackTrace();
+                    } catch (Exception e) {
+                        if (running) e.printStackTrace();
                     }
                 }
+
             } catch (Exception e) {
-                e.printStackTrace();
+                if (running) e.printStackTrace();
             }
-        }).start();
+        }, "TokenListener-Thread");
+
+        tokenListenerThread.start();
     }
+
+
 
     public String getName() {
         return name;

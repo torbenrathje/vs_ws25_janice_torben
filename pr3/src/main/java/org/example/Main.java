@@ -14,15 +14,16 @@ import static org.example.RegistryServer.REGISTRY_HOST;
  * 5 Clients für robot2
  */
 public class Main {
-    static void main() {
+    static void main() throws InterruptedException {
         RegistryServer registryServer = new RegistryServer();
 
         new Thread(registryServer, "RegistryServer-Thread").start();
+        Thread.sleep(500);
 
-        //RobotNode robot1 = new RobotNode("robot1", REGISTRY_HOST, 10101, true);
+        RobotNode robot1 = new RobotNode("robot1", REGISTRY_HOST, 10101, true);
         //RobotNode robot2 = new RobotNode("robot2", REGISTRY_HOST, 10102, true);
 
-        //robot1.start();
+        robot1.start();
         //robot2.start();
 
         //ROBOTER müssen in eigener Main gestartet werden, wegen JavaFX
@@ -39,7 +40,7 @@ public class Main {
         new Thread(clientR1, clientR1.getName()).start();
         for (TerminalClient client : clientsR2)
         {
-            new Thread(client, client.getName()).start();
+            //new Thread(client, client.getName()).start();
         }
 
 

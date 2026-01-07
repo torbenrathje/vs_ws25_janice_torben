@@ -1,10 +1,12 @@
 package org.example;
 
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.lang.reflect.Type;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
@@ -83,11 +85,18 @@ public class RegistryServer implements Runnable{
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
 
             String line = in.readLine();
+            //System.out.println(line);
             if (line == null) return;
 
             // 1. Request als POJO parsen
-            Request<OperationRegistry, ?> request = gson.fromJson(line, Request.class);
+
+            // Typ definieren
+            Type requestType = new TypeToken<Request<OperationRegistry, Object>>(){}.getType();
+
+            Request<OperationRegistry, Object> request = gson.fromJson(line, requestType);
+
             OperationRegistry op = request.getOperation();
+            //System.out.println(op);
 
             Map<String, Object> response;
 
@@ -125,6 +134,12 @@ public class RegistryServer implements Runnable{
                             Integer.class
                     );
                     response = handleRingInfo(clientId);
+                }
+
+                case CLIENT_INFO -> {
+                    System.out.println("Client info erhalten");
+                    //TODO !
+                    response = ok("test");
                 }
 
                 default -> response = error("Unbekannte Operation: " + op);
