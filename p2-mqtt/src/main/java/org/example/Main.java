@@ -9,7 +9,7 @@ public class Main {
 
     public static final int WARTEZEIT_MAIN =8_000;
     public static final String ADDRESS_BROKER = "tcp://localhost:1883"; // 1883 auf mosquitto / active mq
-    public static final String ADDRESS_BROKER_REMOTE = "tcp://172.20.10.3:1883"; //61616 standard active mq port
+    public static final String ADDRESS_BROKER_REMOTE = "tcp://172.20.10.2:1883"; //61616 standard active mq port
 
 
     /**

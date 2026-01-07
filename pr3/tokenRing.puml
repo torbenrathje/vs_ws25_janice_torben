@@ -1,0 +1,28 @@
+@startuml
+title Token Ring – Client-seitige Koordination
+
+participant ClientA
+participant ClientB
+participant ClientC
+participant Registry
+
+ClientA -> Registry : list(type="client")
+Registry --> ClientA : Client-Liste
+
+ClientB -> Registry : list(type="client")
+Registry --> ClientB : Client-Liste
+
+ClientC -> Registry : list(type="client")
+Registry --> ClientC : Client-Liste
+
+note over ClientA,ClientC
+Clients bestimmen Vorgänger/Nachfolger
+aus IDs selbstständig.
+Token wird direkt weitergereicht.
+end note
+
+ClientA -> ClientB : Token
+ClientB -> ClientC : Token
+ClientC -> ClientA : Token
+
+@enduml
