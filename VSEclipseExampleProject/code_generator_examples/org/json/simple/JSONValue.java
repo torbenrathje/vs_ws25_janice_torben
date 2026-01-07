@@ -35,6 +35,7 @@ public class JSONValue {
 	 * 	null
 	 * 
 	 * @deprecated this method may throw an {@code Error} instead of returning
+     * @Deprecated
 	 * {@code null}; please use {@link JSONValue#parseWithException(Reader)}
 	 * instead
 	 */

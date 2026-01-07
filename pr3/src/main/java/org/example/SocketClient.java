@@ -25,4 +25,18 @@ public class SocketClient {
             return gson.fromJson(jsonResponse, Map.class);
         }
     }
+
+
+    public Map<String,Object> sendRequest(String host, int port, Request<?, ?> request) throws IOException {
+        try (Socket socket = new Socket(host, port);
+             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+
+            String jsonRequest = gson.toJson(request);
+            out.println(jsonRequest);
+
+            String jsonResponse = in.readLine();
+            return gson.fromJson(jsonResponse, Map.class);
+        }
+    }
 }

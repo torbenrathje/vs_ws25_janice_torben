@@ -6,9 +6,12 @@ import org.cads.vs.roboticArm.hal.real.CaDSRoboticArmReal;
 import org.cads.vs.roboticArm.hal.ICaDSRoboticArm;
 
 import java.io.*;
+import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.HashMap;
 import java.util.Map;
+
+import static org.example.RegistryServer.REGISTRY_HOST;
+import static org.example.RegistryServer.REGISTRY_PORT;
 
 /**
  * Einfacher Robot-Node
@@ -17,10 +20,10 @@ import java.util.Map;
  * - steuert den Roboter (Simulation oder real)
  */
 public class RobotNode {
-
-    private static final String REGISTRY_HOST = "127.0.0.1";
-    private static final int REGISTRY_PORT = 9000;
     private static final int UPDATE_INTERVAL_MS = 5000;
+
+    private static final int MOVEMENT_PAUSE_MS = 1000;
+    private static final int MOVEMENT_PAUSE_END = 3000;
 
     private final String name;
     private final String ip;
@@ -50,7 +53,7 @@ public class RobotNode {
             if (useSimulation) {
                 roboticArm = new CaDSRoboticArmSimulation();
             } else {
-                roboticArm = new CaDSRoboticArmReal(ip, port);
+                roboticArm = new CaDSRoboticArmReal(ip, port);//TODO sollte das der gleiche IP + Port sein, wie Commands empfangen?
             }
 
             // Registry-Server registrieren
@@ -59,18 +62,67 @@ public class RobotNode {
                 return;
             }
 
-            // Periodisches Update des Eintrags
+            // KeepAlive
             new Thread(this::keepAlive).start();
 
-            // Einfacher Test: Roboterbewegung simulieren
-            simulateMovement();
-
-            // Beenden -> unregister
-            Runtime.getRuntime().addShutdownHook(new Thread(this::unregister));
+            // Command-Listener starten
+            listenForCommands(port);
 
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private void listenForCommands(int port) {
+        new Thread(() -> {
+            try (ServerSocket serverSocket = new ServerSocket(port)) {
+                System.out.println("RobotNode " + name + " wartet auf Commands...");
+                while (true) {
+                    Socket client = serverSocket.accept();
+                    new Thread(() -> handleClient(client)).start();
+                }
+            } catch (IOException e) {
+                System.err.println("Fehler beim Command-Listener: " + e.getMessage());
+            }
+        }, name + "-CommandListener").start();
+    }
+
+    private void handleClient(Socket client) {
+        try (BufferedReader in = new BufferedReader(new InputStreamReader(client.getInputStream()));
+             PrintWriter out = new PrintWriter(client.getOutputStream(), true)) {
+
+            String line = in.readLine();
+
+            // {"operation":"command","payload":{"command":"MOVE 20"}}
+            if (line == null) return;
+
+            Gson gson = new Gson();
+            Request<OperationRobot, ?> request = gson.fromJson(line, Request.class);
+
+            switch (request.getOperation()) {
+                case MOVE -> {
+                    Number number = (Number) request.getPayload();
+                    int percentage = number.intValue();
+                    simulateMovement(percentage);
+                    out.println("OK: MOVE ausgeführt");
+                }
+                case SHUTDOWN -> {
+                    unregister();
+                    shutdown();
+                    out.println("OK: Robot heruntergefahren");
+                }
+                default -> out.println("ERROR: Unbekannte Operation");
+            }
+
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+
+
+    private void shutdown() {
+        roboticArm.teardown();
     }
 
     private boolean register() {
@@ -78,17 +130,18 @@ public class RobotNode {
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
-            Map<String,Object> payload = new HashMap<>();
-            payload.put("name", name);
-            payload.put("ip", ip);
-            payload.put("port", port);
-            payload.put("type", "ROBOT");
+            Entry entry = new Entry(
+                    -1,              // ID wird vom Server vergeben
+                    name,
+                    ip,
+                    port,
+                    Entry.Type.ROBOT
+            );
 
-            Map<String,Object> request = new HashMap<>();
-            request.put("operation", "register");
-            request.put("payload", payload);
+            Request<OperationRegistry, Entry> req =
+                    new Request<>(OperationRegistry.REGISTER, entry);
 
-            out.println(gson.toJson(request));
+            out.println(gson.toJson(req));
 
             String responseLine = in.readLine();
             Map response = gson.fromJson(responseLine, Map.class);
@@ -113,12 +166,8 @@ public class RobotNode {
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
-            Map<String,Object> payload = new HashMap<>();
-            payload.put("name", name);
-
-            Map<String,Object> request = new HashMap<>();
-            request.put("operation", "unregister");
-            request.put("payload", payload);
+            Request<OperationRegistry, String> request =
+                    new Request<>(OperationRegistry.UNREGISTER, name);
 
             out.println(gson.toJson(request));
 
@@ -129,6 +178,7 @@ public class RobotNode {
         }
     }
 
+    //TODO braucht man das?
     private void keepAlive() {
         while (true) {
             try {
@@ -141,13 +191,20 @@ public class RobotNode {
         }
     }
 
-    private void simulateMovement() throws InterruptedException {
-        // Beispiel: einfache Schleife für Simulation
-        System.out.println("Starte Roboter-Simulation");
-        for (int i=0;i<5;i++) {
-            System.out.println("Bewege Roboter auf Position " + i);
-            Thread.sleep(2000);
-        }
-        System.out.println("Simulation beendet.");
+    // Movement Prozent in alle Richtungen setzen
+    private void simulateMovement(int percentage) throws InterruptedException {
+        percentage = Math.max(0, Math.min(percentage, 100)); //0 bis 100
+
+        roboticArm.setBackForthPercentageTo(percentage);
+        Thread.sleep(MOVEMENT_PAUSE_MS);
+
+        roboticArm.setOpenClosePercentageTo(percentage);
+        Thread.sleep(MOVEMENT_PAUSE_MS);
+
+        roboticArm.setLeftRightPercentageTo(percentage);
+        Thread.sleep(MOVEMENT_PAUSE_MS);
+
+        roboticArm.setUpDownPercentageTo(percentage);
+        Thread.sleep(MOVEMENT_PAUSE_END);
     }
 }

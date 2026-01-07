@@ -32,8 +32,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Nebenläufigkeit:
  *  - Thread-pro-Verbindung (einfachstes und für das Praktikum empfohlenes Modell)
  */
-public class RegistryServer {
-    private static final int PORT = 9000;
+public class RegistryServer implements Runnable{
+
+    public static final String REGISTRY_HOST = "127.0.0.1";
+    public static final int REGISTRY_PORT = 9000;
 
     /**
      * Speicher aller registrierten Einträge
@@ -51,10 +53,19 @@ public class RegistryServer {
         new RegistryServer().start();
     }
 
-    public void start() throws Exception {
-        System.out.println("Registry-Server gestartet auf Port " + PORT);
+    @Override
+    public void run() {
+        try {
+            start();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
+    public void start() throws Exception {
+        System.out.println("Registry-Server gestartet auf Port " + REGISTRY_PORT);
+
+        try (ServerSocket serverSocket = new ServerSocket(REGISTRY_PORT)) {
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 // Für jede Verbindung ein eigener Thread
@@ -74,18 +85,48 @@ public class RegistryServer {
             String line = in.readLine();
             if (line == null) return;
 
-            Map<String, Object> request = gson.fromJson(line, Map.class);
-            String op = (String) request.get("operation");
-            Map<String, Object> payload = (Map<String, Object>) request.get("payload");
+            // 1. Request als POJO parsen
+            Request<OperationRegistry, ?> request = gson.fromJson(line, Request.class);
+            OperationRegistry op = request.getOperation();
 
             Map<String, Object> response;
 
-            //Operation auswählen
+            // 2. Operation auswählen
             switch (op) {
-                case "register" -> response = handleRegister(payload);
-                case "unregister" -> response = handleUnregister(payload);
-                case "list" -> response = handleList(payload);
-                case "ringinfo" -> response = handleRingInfo(payload);
+                case REGISTER -> {
+                    Entry entry = gson.fromJson(
+                            gson.toJson(request.getPayload()),
+                            Entry.class
+                    );
+                    response = handleRegister(entry);
+                }
+
+                case UNREGISTER -> {
+                    String name = gson.fromJson(
+                            gson.toJson(request.getPayload()),
+                            String.class
+                    );
+                    response = handleUnregister(name);
+                }
+
+                case LIST -> {
+                    String typeStr = gson.fromJson(
+                            gson.toJson(request.getPayload()),
+                            String.class
+                    );
+                    Entry.Type type = Entry.Type.valueOf(typeStr);
+
+                    response = handleList(type);
+                }
+
+                case RING_INFO -> {
+                    Integer clientId = gson.fromJson(
+                            gson.toJson(request.getPayload()),
+                            Integer.class
+                    );
+                    response = handleRingInfo(clientId);
+                }
+
                 default -> response = error("Unbekannte Operation: " + op);
             }
 
@@ -96,6 +137,7 @@ public class RegistryServer {
         }
     }
 
+
     /**
      * Verarbeitung der Operation: register
      * -----------------------------------
@@ -104,24 +146,24 @@ public class RegistryServer {
      *  - Name muss eindeutig sein
      *  - ID wird automatisch vergeben
      */
-    private Map<String, Object> handleRegister(Map<String, Object> payload) {
+    private Map<String, Object> handleRegister(Entry entry) {
 
-        String name = (String) payload.get("name");
-        String ip = (String) payload.get("ip");
-        // JSON speichert Zahlen als "double", daher konvertieren
-        double portDouble = (double) payload.get("port");
-        int port = (int) portDouble;
-        String typeStr = (String) payload.get("type");
-
-        Entry.Type type = Entry.Type.valueOf(typeStr);
+        String name = entry.getName();
 
         if (entries.containsKey(name)) {
             return error("Name existiert bereits: " + name);
         }
 
+        // ID automatisch vergeben
         int id = idCounter.getAndIncrement();
-        Entry entry = new Entry(id, name, ip, port, type);
-        entries.put(name, entry);
+        Entry newEntry = new Entry(
+                id,
+                entry.getName(),
+                entry.getIp(),
+                entry.getPort(),
+                entry.getType()
+        );
+        entries.put(name, newEntry);
 
         // Payload für Antwort
         Map<String, Object> p = new HashMap<>();
@@ -130,21 +172,23 @@ public class RegistryServer {
         return ok(p);
     }
 
+
     /**
      * Verarbeitung der Operation: unregister
      * --------------------------------------
      * Entfernt einen Eintrag anhand des Namens.
      */
-    private Map<String, Object> handleUnregister(Map<String, Object> payload) {
-        String name = (String) payload.get("name");
+    private Map<String, Object> handleUnregister(String name) {
 
         if (!entries.containsKey(name)) {
             return error("Unbekannter Name: " + name);
         }
 
         entries.remove(name);
+
         return ok(null);
     }
+
 
     /**
      * Verarbeitung der Operation: list
@@ -154,29 +198,18 @@ public class RegistryServer {
      * type = "ROBOT"  → alle Roboter
      * type = "CLIENT" → alle Clients
      */
-    private Map<String, Object> handleList(Map<String, Object> payload) {
-        String typeStr = (String) payload.get("type");
-        Entry.Type type = Entry.Type.valueOf(typeStr);
+    private Map<String, Object> handleList(Entry.Type type) {
 
-        List<Map<String, Object>> result = new ArrayList<>();
-
-        for (Entry e : entries.values()) {
-            if (e.getType() == type) {
-                Map<String, Object> row = new HashMap<>();
-                row.put("id", e.getId());
-                row.put("name", e.getName());
-                row.put("ip", e.getIp());
-                row.put("port", e.getPort());
-                row.put("type", e.getType().toString());
-                result.add(row);
-            }
-        }
+        List<Entry> result = entries.values().stream()
+                .filter(e -> e.getType() == type)
+                .toList();
 
         Map<String, Object> p = new HashMap<>();
         p.put("entries", result);
 
         return ok(p);
     }
+
 
     /**
      * Verarbeitung der Operation: ringinfo
@@ -186,9 +219,7 @@ public class RegistryServer {
      *  1. Alle Clients nach ID sortieren
      *  2. Für die angefragte ID prev/next bestimmen
      */
-    private Map<String, Object> handleRingInfo(Map<String, Object> payload) {
-
-        int requesterId = ((Number) payload.get("clientId")).intValue();
+    private Map<String, Object> handleRingInfo(int requesterId) {
 
         //Alle Clients holener
         List<Entry> clients = entries.values()
