@@ -1,4 +1,6 @@
-package org.example;
+package org.example.mains;
+
+import org.example.RobotNode;
 
 import static org.example.RegistryServer.REGISTRY_HOST;
 

@@ -19,7 +19,7 @@ public class SocketClient {
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
             String jsonRequest = gson.toJson(request);
-            System.out.println(jsonRequest);
+            //System.out.println(jsonRequest);
             out.println(jsonRequest);
 
             String jsonResponse = in.readLine();
@@ -34,7 +34,7 @@ public class SocketClient {
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
             String jsonRequest = gson.toJson(request);
-            System.out.println(jsonRequest);
+            //System.out.println(jsonRequest);
             out.println(jsonRequest);
 
             String jsonResponse = in.readLine();

@@ -51,10 +51,6 @@ public class RegistryServer implements Runnable{
     private final AtomicInteger idCounter = new AtomicInteger(1);
     private final Gson gson = new Gson();
 
-    public static void main(String[] args) throws Exception {
-        new RegistryServer().start();
-    }
-
     @Override
     public void run() {
         try {
@@ -137,9 +133,12 @@ public class RegistryServer implements Runnable{
                 }
 
                 case CLIENT_INFO -> {
-                    System.out.println("Client info erhalten");
-                    //TODO !
-                    response = ok("test");
+                    Integer clientId = gson.fromJson(
+                            gson.toJson(request.getPayload()),
+                            Integer.class
+                    );
+
+                    response = handleClientInfo(clientId);
                 }
 
                 default -> response = error("Unbekannte Operation: " + op);
@@ -150,6 +149,25 @@ public class RegistryServer implements Runnable{
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    //soll zu einer ClientId den Port und Ip zurück geben
+    private Map<String, Object> handleClientInfo(int clientId) {
+
+        for (Entry entry : entries.values()) {
+            if (entry.getId() == clientId) {
+
+
+                // Payload für Antwort
+                Map<String, Object> p = new HashMap<>();
+                p.put("ip", entry.getIp());
+                p.put("port", entry.getPort());
+
+                return ok(p);
+            }
+        }
+
+        return error("Client mit ID " + clientId + " nicht gefunden");
     }
 
 

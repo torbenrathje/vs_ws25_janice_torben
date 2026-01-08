@@ -43,11 +43,6 @@ public class RobotNode {
         this.useSimulation = useSimulation;
     }
 
-    public static void main(String[] args) throws Exception {
-        // Beispiel: RobotNode node = new RobotNode("robot1", "127.0.0.1", 10001, true);
-        RobotNode node = new RobotNode("robot1", "127.0.0.1", 10001, true);
-        node.start();
-    }
 
     public void start() {
         try {
@@ -197,7 +192,7 @@ public class RobotNode {
         while (true) {
             try {
                 Thread.sleep(UPDATE_INTERVAL_MS);
-                System.out.println("KeepAlive: " + name);
+                //System.out.println("KeepAlive: " + name);
                 // Hier könnte man optional nochmal Status senden
             } catch (InterruptedException e) {
                 return;

@@ -8,6 +8,7 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.example.RegistryServer.REGISTRY_HOST;
 import static org.example.RegistryServer.REGISTRY_PORT;
@@ -21,7 +22,7 @@ public class TerminalClient implements Runnable {
     private final int port;
     private int clientId;
     private int prevId, nextId;
-    private boolean hasToken;
+    private AtomicBoolean hasToken;
 
     private final Scanner scanner = new Scanner(System.in);
     private final SocketClient socketClient = new SocketClient();
@@ -31,17 +32,14 @@ public class TerminalClient implements Runnable {
     private volatile boolean running = true; // Mit volatile: Thread B sieht sofort, dass running auf false gesetzt wurde.
     private ServerSocket tokenServerSocket;
 
+    private PendingRobotCommand pendingCommand;
+
 
     public TerminalClient(String name, String ip, int port) {
         this.name = name;
         this.ip = ip;
         this.port = port;
-        hasToken = false;
-    }
-
-    public static void main(String[] args) throws Exception {
-        TerminalClient client = new TerminalClient("client1", "127.0.0.1", 10000);
-        client.start();
+        hasToken = new AtomicBoolean(false);
     }
 
     @Override
@@ -80,11 +78,11 @@ public class TerminalClient implements Runnable {
             int firstClientId = firstIdNumber.intValue();
 
             if (clientId == firstClientId) {
-                System.out.println("Ich bin der erste Client - starte Token.");
-                hasToken = true;
-                controlRobotWithToken();
-                sendToken();
+                System.out.println("Ich bin der erste Client : Token erzeugt");
+                hasToken.set(true);
+                maybeForwardToken();
             }
+
         }
 
 
@@ -92,6 +90,7 @@ public class TerminalClient implements Runnable {
             System.out.println("\n--- Terminal Client ---");
             System.out.println("1: Liste Roboter anzeigen");
             System.out.println("2: Roboter auswaehlen und steuern");
+            System.out.println("3: Topologie anzeigen");
             System.out.println("0: Beenden");
             System.out.print("Eingabe: ");
             String input = scanner.nextLine();
@@ -99,11 +98,10 @@ public class TerminalClient implements Runnable {
             switch (input) {
                 case "1" -> listRobots();
                 case "2" -> {
-                    if (hasToken) {
-                        controlRobotWithToken();
-                    } else {
-                        System.out.println("Du hast kein Token - Robotersteuerung nicht erlaubt.");
-                    }
+                    prepareRobotCommand();
+                }
+                case "3" -> {
+                    topologie();
                 }
                 case "0" -> {
                     shutdown();
@@ -111,6 +109,28 @@ public class TerminalClient implements Runnable {
                 }
                 default -> System.out.println("Ungueltige Eingabe");
             }
+        }
+    }
+
+    private void topologie(){
+        try {
+
+            //Map<String,Object> payload = Map.of("clientId", clientId);
+            //Map<String,Object> request = Map.of("operation", "ringinfo", "payload", payload);
+
+            Request<OperationRegistry, Integer> request =
+                    new Request<>(OperationRegistry.RING_INFO, clientId);
+
+            Map<String,Object> response = socketClient.sendRequest(REGISTRY_HOST, REGISTRY_PORT, request);
+
+            if ("ok".equals(response.get("status"))) {
+                Map<String,Object> p = (Map<String,Object>) response.get("payload");
+                System.out.println("Vorgaenger: " + ((Number)p.get("prev")).intValue());
+                System.out.println("Nachfolger: " + ((Number)p.get("next")).intValue());
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
@@ -126,7 +146,7 @@ public class TerminalClient implements Runnable {
 
         try {
             if (tokenServerSocket != null) {
-                tokenServerSocket.close(); // 💥 WICHTIG
+                tokenServerSocket.close();
             }
         } catch (Exception ignored) {}
     }
@@ -223,8 +243,11 @@ public class TerminalClient implements Runnable {
                 List<Map<String,Object>> entries = (List<Map<String,Object>>) p.get("entries");
                 System.out.println("Bekannte Roboter:");
                 for (Map<String,Object> e : entries) {
-                    System.out.println("ID: "+  e.get("id")+", Name: "+e.get("name")+
-                            ", IP: "+ e.get("ip")+", Port: "+  e.get("port"));
+                    int id = ((Number) e.get("id")).intValue();
+                    int port = ((Number) e.get("port")).intValue();
+
+                    System.out.println("ID: "+  id +", Name: "+e.get("name")+
+                            ", IP: "+ e.get("ip")+", Port: "+  port);
                 }
             }
 
@@ -233,25 +256,25 @@ public class TerminalClient implements Runnable {
         }
     }
 
-    private void controlRobot() {
+
+    private void prepareRobotCommand() {
         System.out.print("Roboter Name eingeben: ");
         String robotName = scanner.nextLine();
 
         try {
-            // Roboter-Liste abfragen
+            // Roboter suchen (wie bisher)
             Request<OperationRegistry, Entry.Type> request =
                     new Request<>(OperationRegistry.LIST, Entry.Type.ROBOT);
             Map<String,Object> response = socketClient.sendRequest(REGISTRY_HOST, REGISTRY_PORT, request);
 
             Map<String,Object> robot = null;
-            if ("ok".equals(response.get("status"))) {
-                Map<String,Object> p = (Map<String,Object>) response.get("payload");
-                List<Map<String,Object>> entries = (List<Map<String,Object>>) p.get("entries");
-                for (Map<String,Object> e : entries) {
-                    if (robotName.equals(e.get("name"))) {
-                        robot = e;
-                        break;
-                    }
+            Map<String,Object> p = (Map<String,Object>) response.get("payload");
+            List<Map<String,Object>> entries = (List<Map<String,Object>>) p.get("entries");
+
+            for (Map<String,Object> e : entries) {
+                if (robotName.equals(e.get("name"))) {
+                    robot = e;
+                    break;
                 }
             }
 
@@ -260,25 +283,27 @@ public class TerminalClient implements Runnable {
                 return;
             }
 
-            String robotIp = (String) robot.get("ip");
-            int robotPort = ((Number) robot.get("port")).intValue();
-            System.out.println("Verbinde zu Roboter " + robotName + " bei " + robotIp + ":" + robotPort);
+            Request<OperationRobot, Object> cmd = readRobotCommand();
+            if (cmd == null) return;
 
-            // Steuerbefehle senden (einfacher Request/Response)
-            System.out.print("Befehl eingeben (z.B. MOVE 1 oder SHUTDOWN): ");
+            PendingRobotCommand prc = new PendingRobotCommand();
+            prc.robotIp = (String) robot.get("ip");
+            prc.robotPort = ((Number) robot.get("port")).intValue();
+            prc.request = cmd;
 
-            Request<OperationRobot, Object> cmdRequest = readRobotCommand();
+            pendingCommand = prc;
 
-            if (cmdRequest != null) {
-                // Senden an RobotNode
-                Map<String,Object> result = socketClient.sendRequest(robotIp, robotPort, cmdRequest);
-                System.out.println("Antwort vom RobotNode: " + result);
+            System.out.println("Befehl vorbereitet. Warte auf Token...");
+
+            if (hasToken.get()) {
+                sendPreparedCommand();
             }
 
         } catch (Exception e) {
-            System.err.println("Fehler bei Robotersteuerung: " + e.getMessage());
+            System.err.println("Fehler: " + e.getMessage());
         }
     }
+
 
     /**
      * Liest einen Befehl vom Terminal ein und erstellt ein RobotRequest-Objekt
@@ -324,11 +349,11 @@ public class TerminalClient implements Runnable {
         return new Request<>(op, payload);
     }
 
-
+    // erfährt nextId und prevId im Ring periodisch vom Registry Server
     private void updateRingInfo() {
         while (running) {
             try {
-                Thread.sleep(RING_UPDATE_INTERVAL_MS);
+
                 //Map<String,Object> payload = Map.of("clientId", clientId);
                 //Map<String,Object> request = Map.of("operation", "ringinfo", "payload", payload);
 
@@ -344,33 +369,73 @@ public class TerminalClient implements Runnable {
                     //System.out.println("Ring aktualisiert: prev=" + prevId + ", next=" + nextId);
                 }
 
-            } catch (Exception ignored) {
+                Thread.sleep(RING_UPDATE_INTERVAL_MS);
+
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
         System.out.println("Update Ring Info beendet");
     }
 
     public void receiveToken(Map<String,Object> tokenMap) {
-        String holder = (String) tokenMap.get("currentHolderId");
-        System.out.println("Token empfangen von: " + holder);
-        hasToken = true;
+        hasToken.set(true);
+        //System.out.println("Token empfangen");
 
-        // Roboter steuern
-        controlRobotWithToken();
-
-        // Token an Nachfolger senden
-        sendToken();
+        if (pendingCommand != null) {
+            sendPreparedCommand();
+        } else {
+            maybeForwardToken();
+        }
     }
 
+    private void sendPreparedCommand() {
+        try {
+            Map<String,Object> result =
+                    socketClient.sendRequest(
+                            pendingCommand.robotIp,
+                            pendingCommand.robotPort,
+                            pendingCommand.request
+                    );
+
+            System.out.println("Antwort vom RobotNode: " + result);
+
+        } catch (Exception e) {
+            System.err.println("Senden fehlgeschlagen: " + e.getMessage());
+        } finally {
+            pendingCommand = null;
+            sendToken();
+        }
+    }
+
+    private void maybeForwardToken() {
+        new Thread(() -> {
+            try {
+                Thread.sleep(1000); // 0,5 Sekunden warten
+                if (hasToken.get()) {
+                    sendToken();
+                }
+            } catch (InterruptedException ignored) {}
+        }).start();
+    }
+
+
+
+
+
     private void sendToken() {
-        if (!hasToken){
+        if (!hasToken.get()){
             return;
         }
 
         try {
-            // Hole Nachfolger-IP/Port über Registry
-            //Map<String,Object> payload = Map.of("clientId", nextId);
-            //Map<String,Object> request = Map.of("operation", "getClientInfo", "payload", payload);
+
+            //ids fangen bei 1 an
+            //TODO next Id muss schon gesetzt sein
+            if (nextId < 1) {
+                //System.out.println("Kein Nachfolger gefunden");
+                return;
+            }
 
             Request<OperationRegistry, Integer> request = new Request<>(OperationRegistry.CLIENT_INFO, nextId);
 
@@ -389,26 +454,18 @@ public class TerminalClient implements Runnable {
             Map<String,Object> tokenPayload = Map.of("currentHolderId", name);
             Map<String,Object> tokenRequest = Map.of("operation", "token", "payload", tokenPayload);
 
-            socketClient.sendRequest(successorIp, successorPort, tokenRequest);
-            System.out.println("Token an Nachfolger gesendet: ID=" + nextId);
 
-            hasToken = false;
+            hasToken.set(false);
+            socketClient.sendRequest(successorIp, successorPort, tokenRequest);//TODO wenn der gar nicht existiert hat keiner das Token
+            //System.out.println("Token an Nachfolger gesendet: ID=" + nextId);
 
         } catch (Exception e) {
             System.err.println("Fehler beim Senden des Tokens: " + e.getMessage());
         }
     }
 
-    private void controlRobotWithToken() {
-        if (!hasToken) {
-            System.out.println("Du hast kein Token. Kann den Roboter nicht steuern.");
-            return;
-        }
 
-        System.out.println("Du hast das Token - Robotersteuerung aktiv!");
-        controlRobot();
-    }
-
+    // um Token zu erhalten
     private void startTokenListener(int listenPort) {
         tokenListenerThread = new Thread(() -> {
             try {
@@ -424,6 +481,7 @@ public class TerminalClient implements Runnable {
                                 socket.getOutputStream(), true);
 
                         String json = in.readLine();
+                        //System.out.println("Input erhalten: " + json);
                         Map<String, Object> request =
                                 new Gson().fromJson(json, Map.class);
 
@@ -460,5 +518,12 @@ public class TerminalClient implements Runnable {
 
     public String getName() {
         return name;
+    }
+
+
+    class PendingRobotCommand {
+        String robotIp;
+        int robotPort;
+        Request<OperationRobot, Object> request;
     }
 }
