@@ -2,47 +2,59 @@
 title Token-Übertragung im Token-Ring
 
 participant "Registry-Service" as Registry
-participant "Client 1" as C1
-participant "Client 2" as C2
-participant "Client 3" as C3
+participant "Terminal-Client A" as C1
+participant "Terminal-Client B" as C2
+participant "Terminal-Client C" as C3
+participant "Robot-Node" as Robot
 
 == Registrierung & Ringaufbau ==
-C1 -> Registry : register(name, ip, port)
-Registry -> C1 : return clientId=1
-C2 -> Registry : register(name, ip, port)
-Registry -> C2 : return clientId=2
-C3 -> Registry : register(name, ip, port)
-Registry -> C3 : return clientId=3
+C1 -> Registry : register(...)
+Registry --> C1 : clientId = 1
+C2 -> Registry : register(...)
+Registry --> C2 : clientId = 2
+C3 -> Registry : register(...)
+Registry --> C3 : clientId = 3
 
-C1 -> Registry : ringinfo(clientId=1)
-Registry -> C1 : prev=3, next=2
+C1 -> Registry : ring_info(1)
+Registry --> C1 : prev = 3, next = 2
 
-C2 -> Registry : ringinfo(clientId=2)
-Registry -> C2 : prev=1, next=3
-
-C3 -> Registry : ringinfo(clientId=3)
-Registry -> C3 : prev=2, next=1
-
-== Token-Zirkulation ==
-note over C1: Client 1 startet das Token
-C1 -> C1 : hatToken = true
-C1 -> C1 : Roboter steuern (controlRobotWithToken)
-
-C1 -> C2 : sendToken(payload: currentHolderId=C1)
-C2 -> C2 : receiveToken(payload)
-C2 -> C2 : hatToken = true
-C2 -> C2 : Roboter steuern
-C2 -> C3 : sendToken(payload: currentHolderId=C2)
-
-C3 -> C3 : receiveToken(payload)
-C3 -> C3 : hatToken = true
-C3 -> C3 : Roboter steuern
-C3 -> C1 : sendToken(payload: currentHolderId=C3)
-
-== Wiederholung ==
-note over C1,C3
-Token rotiert kontinuierlich im Ring
+note over C1
+Client mit kleinster ID
+erzeugt initial das Token
 end note
 
+== Token-Zirkulation ==
+C1 -> C1 : hasToken = true
+
+note right of C1
+Optional:
+Wenn ein Benutzerbefehl
+vorliegt, wird ein Roboter
+gesteuert
+end note
+
+C1 -> Robot : MOVE / SHUTDOWN
+Robot --> C1 : ok
+
+C1 -> C2 : token
+C2 -> C2 : receiveToken()
+C2 -> C2 : hasToken = true
+
+note right of C2
+Kein Befehl vorhanden:
+Token wird automatisch
+weitergereicht
+end note
+
+C2 -> C3 : token
+C3 -> C3 : receiveToken()
+C3 -> C3 : hasToken = true
+
+C3 -> C1 : token
+
+note over C1,C3
+Das Token rotiert zyklisch
+zwischen allen Clients
+end note
 
 @enduml

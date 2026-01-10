@@ -1,29 +1,48 @@
 @startuml
-title Registrierung und Nutzung eines Roboters
+title Registrierung und Nutzung eines Roboters (inkl. Token-Ring)
 
 participant "Robot-Node" as Robot
-participant "Terminal-Client" as Client
+participant "Terminal-Client A" as ClientA
+participant "Terminal-Client B" as ClientB
 participant "Registry-Server" as Registry
 
-== Registrierung des Roboters ==
-Robot -> Registry : register(name, ip, port, type="robot")
+== Registrierung ==
+Robot -> Registry : register(name, ip, port, ROBOT)
 Registry -> Registry : prüfe Name
 Registry -> Registry : ID vergeben\nEintrag speichern
-Registry --> Robot : status=ok, id
+Registry --> Robot : ok, id
 
-== Registrierung des Clients ==
-Client -> Registry : register(name, ip, port, type="client")
+ClientA -> Registry : register(name, ip, port, CLIENT)
 Registry -> Registry : prüfe Name
 Registry -> Registry : ID vergeben\nEintrag speichern
-Registry --> Client : status=ok, id
+Registry --> ClientA : ok, id
+
+ClientB -> Registry : register(name, ip, port, CLIENT)
+Registry -> Registry : prüfe Name
+Registry -> Registry : ID vergeben\nEintrag speichern
+Registry --> ClientB : ok, id
+
+== Ring-Initialisierung ==
+ClientA -> Registry : list(CLIENT)
+ClientA -> ClientA : kleinste ID?\n→ Token erzeugen
+
+== Topologie-Aktualisierung ==
+ClientA -> Registry : ring_info(clientId)
+Registry --> ClientA : prev, next
+
+== Token-Übergabe ==
+ClientA -> ClientB : token
 
 == Abfrage verfügbarer Roboter ==
-Client -> Registry : list(type="robot")
-Registry --> Client : Liste aller Roboter\n(id, name, ip, port)
+ClientB -> Registry : list(type="robot")
+Registry --> ClientB : Liste aller Roboter\n(id, name, ip, port)
 
-== Direkte Robotersteuerung ==
-Client -> Robot : TCP-Verbindung aufbauen
-Client -> Robot : Steuerbefehl(e)
-Robot --> Client : Bestätigung / Status
+
+== Robotersteuerung ==
+ClientB -> Robot : MOVE / SHUTDOWN
+Robot --> ClientB : ok
+
+ClientB -> ClientA : token
 
 @enduml
+
