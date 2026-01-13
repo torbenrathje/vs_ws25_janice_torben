@@ -1,4 +1,4 @@
-package org.example;
+package org.example.communication;
 
 public enum OperationRegistry {
     REGISTER,

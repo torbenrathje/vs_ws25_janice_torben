@@ -1,0 +1,3 @@
+Bei REGISTER von ROBOT: erster Client muss erfahren dass Robot da ist, um Map für Token anzulegen
+Client mit niedrigster ID bekommt Token
+BEI REGISTER von Client: Client -> Liste mit Clients abfragen, wenn erster Client: -> Liste mit Robots abfragen um Token pro Robot zu erzeugen

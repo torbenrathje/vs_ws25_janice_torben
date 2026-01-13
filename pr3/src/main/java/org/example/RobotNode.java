@@ -5,6 +5,10 @@ import com.google.gson.reflect.TypeToken;
 import org.cads.vs.roboticArm.hal.simulation.CaDSRoboticArmSimulation;
 import org.cads.vs.roboticArm.hal.real.CaDSRoboticArmReal;
 import org.cads.vs.roboticArm.hal.ICaDSRoboticArm;
+import org.example.communication.OperationRegistry;
+import org.example.communication.OperationRobot;
+import org.example.communication.Request;
+import org.example.communication.Response;
 
 import java.io.*;
 import java.lang.reflect.Type;
@@ -105,18 +109,18 @@ public class RobotNode {
 
                     simulateMovement(percentage);
 
-                    response = new Response<>("ok", null, "MOVE ausgeführt");
+                    response = new Response<>(Response.Status.OK, null, "MOVE ausgeführt");
                 }
 
                 case SHUTDOWN -> {
                     unregister();
                     shutdown();
 
-                    response = new Response<>("ok", null, "Robot heruntergefahren");
+                    response = new Response<>(Response.Status.OK, null, "Robot heruntergefahren");
                 }
 
                 default -> {
-                    response = new Response<>("error", null, "Unbekannte Operation");
+                    response = new Response<>(Response.Status.OK, null, "Unbekannte Operation");
                 }
             }
 

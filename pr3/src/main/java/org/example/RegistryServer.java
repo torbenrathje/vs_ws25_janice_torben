@@ -2,8 +2,12 @@ package org.example;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import org.example.communication.OperationClient;
+import org.example.communication.OperationRegistry;
+import org.example.communication.Request;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.lang.reflect.Type;
@@ -13,40 +17,14 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Dieser Server stellt einen zentralen Namens- und Koordinationsdienst bereit.
- *
- * Verantwortlichkeiten:
- *  - Registrieren von Robotern und Clients
- *  - Verhindern doppelter Namen
- *  - Zuteilen eindeutiger IDs (wichtig für Token-Ring)
- *  - Auflisten von Robotern/Clients
- *  - Optional: Berechnung von prev/next im Token-Ring
- *
- * KEINE Aufgaben des Registry-Servers:
- *  - Weiterleitung von Roboternachrichten
- *  - Speicherung auf Festplatte
- *  - Token-Verteilung oder Token-Handling
- *
- * Kommunikationsprotokoll:
- *  - TCP, JSON-basierte Requests & Responses
- *
- * Nebenläufigkeit:
- *  - Thread-pro-Verbindung (einfachstes und für das Praktikum empfohlenes Modell)
- */
+import static org.example.communication.OperationClient.TOKEN;
+
+
 public class RegistryServer implements Runnable{
 
     public static final String REGISTRY_HOST = "127.0.0.1";
     public static final int REGISTRY_PORT = 9000;
 
-    /**
-     * Speicher aller registrierten Einträge
-     * Key = Name des Knotens (eindeutig)
-     * Value = Entry-Objekt
-     *
-     * ConcurrentHashMap → thread-sicher für parallele Zugriffe
-     * Persistenz → Daten werden auf dem RAM gespeichert
-     */
     private final Map<String, Entry> entries = new ConcurrentHashMap<>();
     private final AtomicInteger idCounter = new AtomicInteger(1);
     private final Gson gson = new Gson();
@@ -151,7 +129,7 @@ public class RegistryServer implements Runnable{
         }
     }
 
-    //soll zu einer ClientId den Port und Ip zurück geben
+    //soll zu einer ClientId den Port und Ip zurückgeben
     private Map<String, Object> handleClientInfo(int clientId) {
 
         for (Entry entry : entries.values()) {
@@ -172,8 +150,7 @@ public class RegistryServer implements Runnable{
 
 
     /**
-     * Verarbeitung der Operation: register
-     * -----------------------------------
+     * Verarbeitung der Operation: register.
      * Fügt einen Roboter/Client in die Registry ein.
      * Bedingungen:
      *  - Name muss eindeutig sein
@@ -189,12 +166,16 @@ public class RegistryServer implements Runnable{
 
         // ID automatisch vergeben
         int id = idCounter.getAndIncrement();
+
+        Entry.Type type = entry.getType();
+        String robotName = entry.getName();
+
         Entry newEntry = new Entry(
                 id,
-                entry.getName(),
+                robotName,
                 entry.getIp(),
                 entry.getPort(),
-                entry.getType()
+                type
         );
         entries.put(name, newEntry);
 
@@ -202,13 +183,41 @@ public class RegistryServer implements Runnable{
         Map<String, Object> p = new HashMap<>();
         p.put("id", id);
 
+        if (type == Entry.Type.ROBOT) {
+            handleRegisterRobot(robotName);
+        }
+
         return ok(p);
+    }
+
+    /**
+     * erster Client muss Token erhalten
+     */
+    private void handleRegisterRobot(String robotName) {
+        // Token als Request senden
+        Request<OperationClient, String> tokenRequest = new Request<>(TOKEN, robotName);
+
+
+        SocketClient socketClient = new SocketClient();
+
+        Optional<Entry> minClientEntry = entries.values().stream()
+                .filter(e -> e.getType() == Entry.Type.CLIENT)
+                .min(Comparator.comparingInt(Entry::getId));
+
+
+        minClientEntry.ifPresent(entry -> {
+            try {
+                socketClient.sendRequest(entry.getIp(), entry.getPort(), tokenRequest);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
     }
 
 
     /**
-     * Verarbeitung der Operation: unregister
-     * --------------------------------------
+     * Verarbeitung der Operation: unregister.
      * Entfernt einen Eintrag anhand des Namens.
      */
     private Map<String, Object> handleUnregister(String name) {
@@ -225,17 +234,12 @@ public class RegistryServer implements Runnable{
 
     /**
      * Verarbeitung der Operation: list
-     * --------------------------------
-     * Gibt alle Einträge eines Typs zurück.
-     *
      * type = "ROBOT"  → alle Roboter
      * type = "CLIENT" → alle Clients
      */
     private Map<String, Object> handleList(Entry.Type type) {
 
-        List<Entry> result = entries.values().stream()
-                .filter(e -> e.getType() == type)
-                .toList();
+        List<Entry> result = generateListToType(type);
 
         Map<String, Object> p = new HashMap<>();
         p.put("entries", result);
@@ -243,12 +247,15 @@ public class RegistryServer implements Runnable{
         return ok(p);
     }
 
+    private List<Entry> generateListToType(Entry.Type type) {
+        return entries.values().stream()
+                .filter(e -> e.getType() == type)
+                .toList();
+    }
+
 
     /**
      * Verarbeitung der Operation: ringinfo
-     * ------------------------------------
-     * OPTIONAL: Berechnet predecessor / successor eines Clients im Token-Ring.
-     *
      *  1. Alle Clients nach ID sortieren
      *  2. Für die angefragte ID prev/next bestimmen
      */
@@ -306,139 +313,3 @@ public class RegistryServer implements Runnable{
         return m;
     }
 }
-
-/**
- * REGISTRY-SERVICE – ÜBERSICHT
- * ----------------------------
- * Der Registry-Service ist ein zentraler Server, der Informationen über
- * alle aktiven Clients und Roboterarme im System verwaltet.
- *
- * Ziel:
- *  - Roboter- und Client-Knoten können sich mit Name, IP und Port registrieren.
- *  - Ein Terminal-Client kann nach verfügbaren Robotern fragen.
- *  - Ein Terminal-Client bekommt eine eindeutige, fortlaufende ID für den Token Ring.
- *  - Registry verhindert doppelte Namen.
- *  - Registry verteilt keine Nachrichten zwischen Clients und Robotern, sondern
- *    dient nur als Namens- & Koordinationsdienst.
- *================================================================================
- * ANFORDERUNGEN UND SERVERVERHALTEN
- * ================================================================================
- *
- * 1) ANWENDUNGSPROTOKOLL (JSON)
- * Der Registry-Server kommuniziert ausschließlich über JSON-Nachrichten.
- * Jede Nachricht hat den Aufbau:
- *  {
- *   "operation": "register" | "unregister" | "list",
- *   "payload": { ... }
- *   }
- *
- *   2) GESPEICHERTE ATTRIBUTE PRO KNOTEN
- *      *      - int id         -> fortlaufende, eindeutige ID (für Token Ring)
- *      *      - String name    -> eindeutiger Name des Knotens
- *      *      - String ip      -> IP-Adresse des Knotens
- *      *      - int port       -> Port des Knotens
- *      *      - String type    -> "client" oder "robot"
- *
- * 3) OPERATIONEN
- * --------------------------------------------------------------------------------
- *    register(name, ip, port, type)
- *    -------------------------------
- *    - Ein Client oder Roboter meldet sich an.
- *    - Registry prüft, ob der Name bereits existiert.
- *         -> Wenn ja → Fehler zurückgeben.
- *    - Wenn der Name frei ist:
- *         -> neue ID generieren
- *         -> Eintrag in Speicher ablegen
- *         -> Bestätigung an Client senden
- *
- *    Beispiel Response:
- *      {
- *        "status": "ok",
- *        "id": 3,
- *        "message": "registered"
- *      }
- *
- *
- *    unregister(name)
- *    ----------------
- *    - Entfernt einen Eintrag aus der Registry.
- *    - Wenn Name nicht existiert → Fehler senden.
- *
- *
- *    list(type)
- *    ----------
- *    - Gibt alle Einträge des gewünschten Typs zurück:
- *      type = "robot" → alle Roboterarme
- *      type = "client" → alle Clients
- *      type = "all" → alles
- *
- *    Beispiel:
- *      {
- *        "status": "ok",
- *        "entries": [
- *          {"id":1, "name":"arm1", "ip":"127.0.0.1", "port":9000, "type":"robot"},
- *          ...
- *        ]
- *      }
- *
- *
- * ================================================================================
- * 4) NEBENLÄUFIGKEIT
- * ================================================================================
- * Der Server muss mehrere parallele Verbindungen unterstützen.
- *
- * GEEIGNETE STRATEGIEN (eine auswählen):
- *   ✔ Thread pro Verbindung (einfachste Lösung)
- *   ✔ Thread-Pool (performanter)
- *   ✔ NIO (komplexer, aber skalierbar)
- *
- * Empfehlung für Praktikum: THREAD-PRO-VERBINDUNG
- *   - pro Client-Connection wird ein eigener Thread erzeugt
- *   - einfacher zu implementieren + gut verständlich
- *
- *
- * ================================================================================
- * 5) FEHLERVERHALTEN
- * ================================================================================
- *  - doppelte Namen → {"status": "error", "message":"name already in use"}
- *  - ungültige Nachrichten → {"status":"error", "message":"invalid request"}
- *  - ungültiger Typ → {"status":"error", "message":"unknown type"}
- *
- *
- * ================================================================================
- * 6) PERSISTENZ
- * ================================================================================
- *  - Alles wird nur im RAM gespeichert (HashMap)
- *  - Keine Datenbank nötig
- *
- *
- * ================================================================================
- * 7) TOKEN-RING-LOGIK (für Terminal-Clients)
- * ================================================================================
- * Der Registry-Service vergibt fortlaufende IDs.
- * Die Clients bilden daraus eine logische Ring-Topologie:
- *
- *  - Jeder Client fragt regelmäßig:
- *        list("client")
- *
- *  - Daraus bestimmt der Client:
- *        Vorgänger-ID: größte ID kleiner als meine ID
- *        Nachfolger-ID: kleinste ID größer als meine ID
- *
- *  - Der Client mit der kleinsten ID erzeugt einmalig das Token.
- *
- * Registry selbst macht KEINE Token-Verwaltung!
- * Sie verteilt nur IDs.
- *
- *
- * ================================================================================
- * 8) START UND LAUFZEITVERHALTEN
- * ================================================================================
- *  - Server startet → hört auf einem TCP-Port
- *  - Für jede eingehende Verbindung:
- *        -> Thread wird gestartet
- *        -> JSON-Payload wird verarbeitet
- *        -> Antwort wird zurückgeschickt
- *  - Beim Beenden eines Knotens ruft dieser unregister(name) auf.
- *
- */
