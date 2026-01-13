@@ -34,7 +34,14 @@ public class ClientStub implements Datastore{
 
     @Override
     public String read(int index) throws NoSuchElementException {
+        if(servers.size() == 0){
+            throw new RuntimeException("Kein Server vorhanden");
+        }
         ServerAddress server = servers.get(roundRobin);
+        if (Config.DEBUG) {
+            System.out.println("Read bei Server mit id: " + roundRobin);
+        }
+
         roundRobin = (roundRobin + 1) % servers.size();
 
         MessageRequest request = new MessageRequest(MessageType.REQUEST, currentId++, "read", new Object[]{index});
@@ -77,7 +84,9 @@ public class ClientStub implements Datastore{
 
                 AbstractMessage messageResponse = gson.fromJson(jsonResponse, AbstractMessage.class);
                 if (messageResponse instanceof MessageResponse res) {
-                    //System.out.println(res);
+                    if (Config.DEBUG) {
+                        System.out.println("Response :" + res);
+                    }
                     if (res.error != null)
                     {
                         switch (res.error) {
@@ -87,6 +96,9 @@ public class ClientStub implements Datastore{
                             case PARAMETER_TYPE_INVALID -> throw new RuntimeException("Parameter Type Invalid");
                             case SERVER_NOT_REACHABLE -> {
                                 servers.remove(server);
+                                if (Config.DEBUG) {
+                                    System.err.println("Server Not Reachable");
+                                }
                                 throw new ServerNotReachableException("Server Not Reachable");
                             }
                             default -> throw new RuntimeException("Unknown Exception");
@@ -100,6 +112,9 @@ public class ClientStub implements Datastore{
 
         } catch (IOException e) {
             servers.remove(server);
+            if (Config.DEBUG) {
+                System.err.println("Server Not Reachable");
+            }
             throw new ServerNotReachableException("Server Not Reachable");
         }
     }

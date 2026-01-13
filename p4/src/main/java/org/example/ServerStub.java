@@ -30,22 +30,44 @@ davon nachrichtentyp erstellen
 
 
     private Datastore datastore;
+    private ServerSocket serverSocket;
+    private volatile boolean running = false; // für sauberen Shutdown
 
     public ServerStub(Datastore dataStoreServer) {
         datastore = dataStoreServer;
     }
 
     public void startServer(int port) throws IOException {
-        ServerSocket serverSocket = new ServerSocket(port);
+        serverSocket = new ServerSocket(port);
+        running = true;
 
         //ServerSocket serverSocket = new ServerSocket();
         InetAddress localAddress = InetAddress.getLocalHost();
-        System.out.println("server runs on: " + localAddress.getHostAddress());
+        System.out.println("server runs on: " + localAddress.getHostAddress() + " on Port: " + port);
         //serverSocket.bind(new InetSocketAddress(localAddress, port));
 
-        while (true) {
-            Socket clientSocket = serverSocket.accept();
-            new Thread(() -> handleClient(clientSocket)).start();
+        while (running) {
+            try {
+                Socket clientSocket = serverSocket.accept();
+                new Thread(() -> handleClient(clientSocket)).start();
+            } catch (IOException e) {
+                if (running) {
+                    e.printStackTrace(); // nur Fehler ausgeben, wenn server noch laufen soll
+                }
+            }
+
+        }
+        System.out.println("Server auf Port " + port + " wurde beendet.");
+    }
+
+    public void stopServer() {
+        running = false;
+        try {
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                serverSocket.close(); // accept() bricht ab
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 

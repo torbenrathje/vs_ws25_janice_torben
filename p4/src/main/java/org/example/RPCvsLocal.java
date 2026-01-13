@@ -18,7 +18,8 @@ public class RPCvsLocal {
 
         for(int i = 0; i < servers.size(); i++){
             int port = servers.get(i).port();
-            Thread serverThread = new Thread(() -> Server.main(new String[]{String.valueOf(port)}));
+            Server server = new Server(port);
+            Thread serverThread = new Thread(() -> server.startServer());
             serverThread.setDaemon(true); // schließt bei testende
             serverThread.start();
         }
@@ -36,7 +37,7 @@ public class RPCvsLocal {
         long endClient;
         long resultClient;
 
-        for (int j = 0; j<4; j++) {
+        for (int j = 0; j< servers.size(); j++) {
             client = new ClientStub(servers.subList(0, j+1));
 
             startClient = System.nanoTime();
@@ -49,7 +50,7 @@ public class RPCvsLocal {
 
             resultClient = (endClient - startClient) /1000000;
 
-            System.out.println("Dauer von " + NUM_RUNS + " RPC Methodenaufrufe betraegt: " + resultClient + " ms bei " + j + " Anzahl an Servern" );
+            System.out.println("Dauer von " + NUM_RUNS + " RPC Methodenaufrufe betraegt: " + resultClient + " ms bei " + (j+1) + " Anzahl an Servern" );
         }
     }
 }

@@ -14,6 +14,7 @@ public class Client {
     public static void main(String[] args) {
         List<ServerAddress> list = new ArrayList<>();
         list.add(new ServerAddress(DESTINATION_IP, DESTINATION_PORTS[0]));
+        list.add(new ServerAddress(DESTINATION_IP, DESTINATION_PORTS[1]));
 
         Datastore client = new ClientStub(list);
         client.write(1, "B");
