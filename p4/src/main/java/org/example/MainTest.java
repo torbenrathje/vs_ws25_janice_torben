@@ -40,15 +40,20 @@ public class MainTest {
         Datastore client = new ClientStub(servers);
 
         client.write(0, "A");
-        client.read(0);//sollte beim ersten Server lesen
+        System.out.println(client.read(0));//sollte beim ersten Server lesen
 
         serverList.get(1).stopServer();
 
-        client.read(0); //sollte laut round robin versuchen beim zweiten zu lesen
+        System.out.println(client.read(0)); //sollte laut round robin versuchen beim zweiten zu lesen
 
         serverList.get(0).stopServer();
 
-        client.read(0);
+        try {
+            System.out.println(client.read(0));
+        }
+        catch (RuntimeException e) {
+            System.err.println(e.getMessage());
+        }
     }
 
 }

@@ -4,26 +4,16 @@ import java.util.List;
 
 import static org.example.Client.DESTINATION_IP;
 
-public class RPCvsLocal {
+public class Main {
     static final int NUM_RUNS = 500;
 
+
+    //TODO erstmal MainServer auf allen Rechnern starten
     public static void main(String[] args) {
-        List<ServerAddress> servers = List.of(
-                new ServerAddress(DESTINATION_IP, 44444),
-                new ServerAddress(DESTINATION_IP, 44445),
-                new ServerAddress(DESTINATION_IP, 44446),
-                new ServerAddress(DESTINATION_IP, 44447)
 
-        );
+        List<ServerAddress> servers = Config.SERVER_LIST;
 
-        for(int i = 0; i < servers.size(); i++){
-            int port = servers.get(i).port();
-            Server server = new Server(port);
-            Thread serverThread = new Thread(() -> server.startServer());
-            serverThread.setDaemon(true); // schließt bei testende
-            serverThread.start();
-        }
-
+        //
 
         //server muss laufen
         try {

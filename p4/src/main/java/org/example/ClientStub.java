@@ -51,7 +51,7 @@ public class ClientStub implements Datastore{
             result = sendRequestToIp(request, server);
         }
         catch (ServerNotReachableException e) {//Server ist ausgefallen -> nochmal
-            read(index);
+            return read(index);
         }
         return result;
     }
