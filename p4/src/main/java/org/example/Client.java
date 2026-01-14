@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 public class Client {
-    public static final String DESTINATION_IP = "localhost";
+    public static final String DESTINATION_IP = "172.20.10.3";
     //public static final String DESTINATION_IP = "192.168.178.29";
     //public static final String DESTINATION_IP = "10.88.109.202";
 

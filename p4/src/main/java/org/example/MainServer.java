@@ -12,7 +12,7 @@ public class MainServer {
                 int port = Config.SERVER_LIST.get(i).port();
                 Server server = new Server(port);
                 Thread serverThread = new Thread(() -> server.startServer());
-                serverThread.setDaemon(true); // schließt bei testende
+                //serverThread.setDaemon(true); // schließt bei testende
                 serverThread.start();
             }
         }

@@ -5,7 +5,7 @@ import java.util.List;
 import static org.example.Client.DESTINATION_IP;
 
 public class Main {
-    static final int NUM_RUNS = 500;
+    static final int NUM_RUNS = 100;
 
 
     //TODO erstmal MainServer auf allen Rechnern starten
