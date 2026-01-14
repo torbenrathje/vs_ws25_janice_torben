@@ -5,6 +5,7 @@ import com.google.gson.reflect.TypeToken;
 import org.example.communication.*;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.lang.reflect.Type;
@@ -66,14 +67,16 @@ public class TerminalClient implements Runnable {
             shutdown();
         }));
 
+        //Token-Listener starten (um eingehende Token-Requests zu empfangen)
+        startTokenListener(port);
+
+        Thread.sleep(1000);
+
         //Registrierung beim Registry-Server
         if (!register()) {
             System.err.println("Registrierung fehlgeschlagen, beende.");
             return;
         }
-
-        //Token-Listener starten (um eingehende Token-Requests zu empfangen)
-        startTokenListener(port);
 
         //Ring-Update starten
         startRingUpdater();
@@ -468,7 +471,7 @@ public class TerminalClient implements Runnable {
     private void maybeForwardToken(String robotName) {
         new Thread(() -> {
             try {
-                Thread.sleep(1000); // 1 Sekunde warten
+                Thread.sleep(FORWARD_INTERVAL_MS); // 1 Sekunde warten
                 AtomicBoolean token = robotTokens.get(robotName);
                 if (token != null) {
                     sendToken(robotName);
@@ -532,7 +535,13 @@ public class TerminalClient implements Runnable {
             if (Config.DEBUG) {
                 System.out.println("Token auf False gesetzt");
             }
-            socketClient.sendRequest(successorIp, successorPort, tokenRequest);//TODO wenn der gar nicht existiert hat keiner das Token
+            try {
+                socketClient.sendRequest(successorIp, successorPort, tokenRequest);//TODO wenn der gar nicht existiert hat keiner das Token
+            }
+            catch (IOException e) {
+                System.err.println("Fehler beim Senden des Tokens an nächsten Client: " + successorIp + ", " + successorPort + e.getMessage());
+            }
+
             if (Config.DEBUG) {
                 System.out.println("Token an Nachfolger gesendet: ID=" + nextId);
             }

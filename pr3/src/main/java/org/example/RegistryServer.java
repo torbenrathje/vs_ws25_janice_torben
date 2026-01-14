@@ -22,7 +22,9 @@ import static org.example.communication.OperationClient.TOKEN;
 
 public class RegistryServer implements Runnable{
 
-    public static final String REGISTRY_HOST = "127.0.0.1";
+    //public static final String REGISTRY_HOST = "127.0.0.1";
+    public static final String REGISTRY_HOST = "10.51.154.202";
+
     public static final int REGISTRY_PORT = 9000;
 
     private final Map<String, Entry> entries = new ConcurrentHashMap<>();
