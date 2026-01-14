@@ -21,6 +21,8 @@ import static org.example.communication.OperationClient.TOKEN;
 public class TerminalClient implements Runnable {
 
     private static final int RING_UPDATE_INTERVAL_MS = 5000;
+    private static final int FORWARD_INTERVAL_MS = 1000;
+    private static final int MAX_RETRIES = 3;
 
     private final String name;
     private final String ip;
@@ -328,10 +330,10 @@ public class TerminalClient implements Runnable {
 
             System.out.println("Befehl vorbereitet. Warte auf Token...");
 
-            AtomicBoolean token = robotTokens.get(robotName);
-            if (token != null && token.get()) {
-                sendPreparedCommand(prc);
-            }
+            //AtomicBoolean token = robotTokens.get(robotName);
+            //if (token != null && token.get()) { //HIER NUR NOCH VORBEREITEN, SENDEN NUR IN MAYBE FORWARD TOKEN
+            //    sendPreparedCommand(prc);
+            //}
 
         } catch (Exception e) {
             System.err.println("Fehler: " + e.getMessage());
@@ -384,6 +386,7 @@ public class TerminalClient implements Runnable {
     }
 
     // erfährt nextId und prevId im Ring periodisch vom Registry Server
+    //und loescht roboter token raus wenn roboter nicht mehr erreichbar
     private void updateRingInfo() {
         while (running) {
             try {
@@ -400,8 +403,27 @@ public class TerminalClient implements Runnable {
                     Map<String,Object> p = (Map<String,Object>) response.get("payload");
                     prevId = ((Number)p.get("prev")).intValue();
                     nextId = ((Number)p.get("next")).intValue();
-                    //System.out.println("Ring aktualisiert: prev=" + prevId + ", next=" + nextId);
+
+                    if (Config.DEBUG)
+                    {
+                        System.out.println("Ring aktualisiert: prev=" + prevId + ", next=" + nextId);
+                    }
+
+                    Set<String> setOfRobots = new HashSet<>();
+                    List<Map<String,Object>> entries = getListOfRobots();
+                    if (entries != null) {
+                        for (Map<String,Object> e : entries) {
+                            String robotName = (String) e.get("name");
+                            setOfRobots.add(robotName);
+                        }
+                    }
+
+                    // entferne alle Token-Einträge für nicht mehr existierende Roboter
+                    robotTokens.keySet().removeIf(robotName -> !setOfRobots.contains(robotName));
+
                 }
+
+
 
                 Thread.sleep(RING_UPDATE_INTERVAL_MS);
 
@@ -417,15 +439,14 @@ public class TerminalClient implements Runnable {
     }
 
     public void receiveRobotToken(String robotName) {
-        AtomicBoolean token = robotTokens.computeIfAbsent(robotName, k -> new AtomicBoolean(false));
+        AtomicBoolean token = robotTokens.computeIfAbsent(robotName, k -> new AtomicBoolean(false));// gib key wenn existiert sonst erstelle
         token.set(true);
 
         PendingRobotCommand cmd = pendingCommands.get(robotName);
         if (cmd != null) {
             sendPreparedCommand(cmd);
-        } else {
-            maybeForwardToken(robotName);
         }
+        maybeForwardToken(robotName);
     }
 
     private void sendPreparedCommand(PendingRobotCommand cmd) {
@@ -433,14 +454,14 @@ public class TerminalClient implements Runnable {
             Map<String,Object> result =
                     socketClient.sendRequest(cmd.robotIp, cmd.robotPort, cmd.request);
 
-            System.out.println("Antwort vom RobotNode: " + result);
+            if (Config.DEBUG) {
+                System.out.println("Antwort vom RobotNode: " + result);
+            }
 
         } catch (Exception e) {
             System.err.println("Senden fehlgeschlagen: " + e.getMessage());
         } finally {
             pendingCommands.remove(cmd.robotName);
-            robotTokens.get(cmd.robotName).set(false);
-            sendToken(cmd.robotName);
         }
     }
 
@@ -449,7 +470,7 @@ public class TerminalClient implements Runnable {
             try {
                 Thread.sleep(1000); // 1 Sekunde warten
                 AtomicBoolean token = robotTokens.get(robotName);
-                if (token != null && token.get()) {
+                if (token != null) {
                     sendToken(robotName);
                 }
             } catch (InterruptedException ignored) {}
@@ -463,6 +484,7 @@ public class TerminalClient implements Runnable {
     private void sendToken(String robotName) {
         AtomicBoolean token = robotTokens.get(robotName);
         if (!token.get()) {
+            System.err.println("Kein Token für robot: " + robotName);
             return;
         }
 
@@ -471,19 +493,34 @@ public class TerminalClient implements Runnable {
             //ids fangen bei 1 an
             //TODO next Id muss schon gesetzt sein
             if (nextId < 1) {
-                //System.out.println("Kein Nachfolger gefunden");
+                System.err.println("Kein Nachfolger gefunden");
                 return;
             }
 
-            Request<OperationRegistry, Integer> request = new Request<>(OperationRegistry.CLIENT_INFO, nextId);
 
-            //öffnet eune Soket-Verbindung zum Server
-            Map<String,Object> response = socketClient.sendRequest(REGISTRY_HOST, REGISTRY_PORT, request);
-            if (!"ok".equals(response.get("status"))) {
-                System.err.println("Fehler: Nachfolger nicht gefunden");
-                return;
+            Request<OperationRegistry, Integer> request;
+            Map<String, Object> response = null;
+            for (int i = 1; i<=MAX_RETRIES; i++) {
+                request = new Request<>(OperationRegistry.CLIENT_INFO, nextId);
+
+                //öffnet eune Soket-Verbindung zum Server
+                response = socketClient.sendRequest(REGISTRY_HOST, REGISTRY_PORT, request);
+                if (!"ok".equals(response.get("status"))) {
+                    if (nextId == clientId) //wenn der naechste man selbst ist, sich also gerade herunterfährt, soll nicht 1000 mal neu versucht werden
+                    {
+                        return;
+                    }
+                    System.err.println("Fehler: Nachfolger nicht gefunden, versuche erneut");
+                    if (i== MAX_RETRIES)
+                    {
+                        System.err.println("Kein Nachfolger erreichbar");
+                        return;
+                    }
+                    Thread.sleep(RING_UPDATE_INTERVAL_MS);
+                    continue;
+                }
+                break;
             }
-
             Map<String,Object> clientInfo = (Map<String,Object>) response.get("payload");
             String successorIp = (String) clientInfo.get("ip");
             int successorPort = ((Number) clientInfo.get("port")).intValue();
@@ -491,9 +528,14 @@ public class TerminalClient implements Runnable {
             // Token als Request senden
             Request<OperationClient, String> tokenRequest = new Request<>(TOKEN, robotName);
 
-            //hasToken.set(false); //TODO hier doch?
+            token.set(false);
+            if (Config.DEBUG) {
+                System.out.println("Token auf False gesetzt");
+            }
             socketClient.sendRequest(successorIp, successorPort, tokenRequest);//TODO wenn der gar nicht existiert hat keiner das Token
-            //System.out.println("Token an Nachfolger gesendet: ID=" + nextId);
+            if (Config.DEBUG) {
+                System.out.println("Token an Nachfolger gesendet: ID=" + nextId);
+            }
 
         } catch (Exception e) {
             System.err.println("Fehler beim Senden des Tokens: " + e.getMessage());
@@ -521,7 +563,9 @@ public class TerminalClient implements Runnable {
 
                         Gson gson = new Gson();
 
-                        //System.out.println("Input erhalten: " + line);
+                        if (Config.DEBUG) {
+                            System.out.println("Input erhalten: " + line);
+                        }
                         Type requestType = new TypeToken<Request<OperationClient, Object>>(){}.getType();
                         Request<OperationClient, ?> request = gson.fromJson(line, requestType);
 
@@ -569,7 +613,6 @@ public class TerminalClient implements Runnable {
                 System.out.println("Shutdown: Reiche Token für Roboter "
                         + robotName + " weiter");
                 sendToken(robotName);
-                hasToken.set(false);
             }
         }
     }

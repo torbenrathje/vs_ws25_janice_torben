@@ -36,4 +36,15 @@ public class Entry {
     public int getPort() {
         return port;
     }
+
+    @Override
+    public String toString() {
+        return "Entry{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", ip='" + ip + '\'' +
+                ", port=" + port +
+                ", type=" + type +
+                '}';
+    }
 }

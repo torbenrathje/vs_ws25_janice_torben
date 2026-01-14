@@ -178,6 +178,10 @@ public class RegistryServer implements Runnable{
                 type
         );
         entries.put(name, newEntry);
+        if (Config.DEBUG)
+        {
+            System.out.println("Client registriert: " + newEntry);
+        }
 
         // Payload für Antwort
         Map<String, Object> p = new HashMap<>();
@@ -227,6 +231,11 @@ public class RegistryServer implements Runnable{
         }
 
         entries.remove(name);
+
+        if (Config.DEBUG)
+        {
+            System.out.println("Client unregistriert: " + name);
+        }
 
         return ok(null);
     }
